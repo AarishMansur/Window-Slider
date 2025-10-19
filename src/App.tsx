@@ -242,7 +242,7 @@ function App() {
           const rotationEnd = 1.0;
           const rotationProgress = Math.max(0, Math.min(1, (progress - rotationStart) / (rotationEnd - rotationStart)));
           
-          const targetRotation = Math.PI * 8 * rotationProgress; 
+          const targetRotation = Math.PI * 3*4 * rotationProgress; 
           
           model.rotation.y = targetRotation;
         }
