@@ -1,6 +1,5 @@
 import { GiAzulFlake } from "react-icons/gi";
 import { FaBolt } from "react-icons/fa6";
-
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import * as THREE from 'three'
@@ -85,7 +84,8 @@ function App() {
       })
     })
 
-    let model, currentRotation = 0, modelSize;
+    let model: THREE.Group | null = null; 
+    let modelSize: THREE.Vector3 | null = null;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(
@@ -163,14 +163,9 @@ function App() {
 
         scene.add(model);
         setupModel();
-        console.log('Model loaded successfully');
       },
-      (progress) => {
-        console.log('Loading...', (progress.loaded / progress.total * 100) + '%');
-      },
-      (error) => {
-        console.error('Error loading model:', error);
-      }
+      ()=>{},
+      () => {}
     )
 
     function animate(){
@@ -242,8 +237,6 @@ function App() {
           })
         })
    
-
-     
         if(model){
           const rotationStart = 0.03;
           const rotationEnd = 1.0;
@@ -251,9 +244,7 @@ function App() {
           
           const targetRotation = Math.PI * 8 * rotationProgress; 
           
-     
           model.rotation.y = targetRotation;
-          currentRotation = targetRotation;
         }
       }
     })
