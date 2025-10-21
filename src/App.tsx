@@ -93,6 +93,8 @@ function App() {
 
     let model: THREE.Group | null = null; 
     let modelSize: THREE.Vector3 | null = null;
+    let modelCenter: THREE.Vector3 | null = null;
+    let pivot: THREE.Group | null = null;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(
@@ -101,6 +103,9 @@ function App() {
       0.1,
       1000
     )
+
+    pivot = new THREE.Group();
+    scene.add(pivot);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true});
 
@@ -137,21 +142,29 @@ function App() {
     fillLight.position.set(-2, 0, -2);
     scene.add(fillLight);
 
-    function setupModel(){
-      if(!model || !modelSize) return;
-      const isMobile = window.innerWidth < 1000;
-      const box = new THREE.Box3().setFromObject(model);
-      const center = box.getCenter(new THREE.Vector3());
+    const hemiLight = new THREE.HemisphereLight(0xeeeeff, 0x111122, 0.6);
+    scene.add(hemiLight);
 
-      model.position.set(
-        isMobile ? -center.x : -center.x - modelSize.x * 0.4,
-        -center.y + modelSize.y * 0.085,
-        -center.z
-      );
+    const rimLight = new THREE.DirectionalLight(0xfff0f0, 0.35);
+    rimLight.position.set(-3, 1.5, 2);
+    scene.add(rimLight);
+
+    function setupModel(){
+      if(!model || !modelSize || !modelCenter || !pivot) return;
+      const isMobile = window.innerWidth < 1000;
+
+      const offsetX = isMobile ? -modelCenter.x : -modelCenter.x - modelSize.x * 0.4;
+      const offsetY = -modelCenter.y + modelSize.y * 0.085;
+      const offsetZ = -modelCenter.z;
+
+      model.position.set(offsetX, offsetY, offsetZ);
 
       model.rotation.z = isMobile ? 0 : THREE.MathUtils.degToRad(-25);
-      // Ensure initial rotation.y is set to 0 to start the scroll rotation from a known point.
       model.rotation.y = 0; 
+
+      pivot.rotation.set(0, 0, 0);
+      pivot.position.set(0, 0, 0);
+
       const cameraDistance = isMobile ? 2 : 1.25;
       camera.position.set(0, 0, Math.max(modelSize.x, modelSize.y, modelSize.z) * cameraDistance);
       camera.lookAt(0, 0, 0);
@@ -161,19 +174,29 @@ function App() {
       '/assets/laptop.glb', 
       (gltf)=>{
         model = gltf.scene;
-        model.traverse((node)=>{
-          if(node instanceof THREE.Mesh && node.material){
-            Object.assign(node.material, {
-              metalness: 0.05,
-              roughness: 0.9,
+        model.traverse((obj: THREE.Object3D)=>{
+          if(obj instanceof THREE.Mesh){
+            const mesh = obj as THREE.Mesh;
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            materials.forEach((mat) => {
+              if(mat instanceof THREE.MeshStandardMaterial){
+                mat.metalness = 0.15;
+                mat.roughness = 0.6;
+              }
             })
           }
         })
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
         modelSize = size;
+        modelCenter = center;
 
-        scene.add(model);
+        if(pivot){
+          pivot.add(model);
+        } else {
+          scene.add(model);
+        }
         setupModel();
       },
       ()=>{},
@@ -195,14 +218,15 @@ function App() {
     
     window.addEventListener("resize", handleResize)
 
-    ScrollTrigger.create({
+    const st: ReturnType<typeof ScrollTrigger.create> = ScrollTrigger.create({
       trigger: ".product-overview",
       start: "top top",
       end: `+=${window.innerHeight * 4}px`, 
       pin: true,
       pinSpacing: true,
       scrub: 1,
-      onUpdate: ({progress})=>{
+      onUpdate: ()=>{
+        const progress = st.progress;
         const header1Start = 0.0;
         const header1End = 0.30;
         const header1Progress = Math.max(0, Math.min(1, (progress - header1Start) / (header1End - header1Start)));
@@ -249,20 +273,29 @@ function App() {
             duration: 0
           })
         })
-   
-        if(model){
-          const rotationStart = 0.03;
-          const rotationEnd = 1.0;
-          const rotationProgress = Math.max(0, Math.min(1, (progress - rotationStart) / (rotationEnd - rotationStart)));
-          
-          // The rotation logic for a cylindrical rotation around the Y-axis is correct.
-          // The issue was visual due to the model container scrolling.
-          const targetRotation = Math.PI * 8 * rotationProgress; 
-          
-          model.rotation.y = targetRotation;
-        }
-      }
-    })
+
+   if(pivot && model && modelSize){
+     const rotationStart = 0.03;
+     const rotationEnd = 1.0;
+     const rotationProgress = Math.max(0, Math.min(1, (progress - rotationStart) / (rotationEnd - rotationStart)));
+
+     // Cylindrical orbit: rotate the pivot so the model orbits around the Y axis,
+     // rather than spinning in place around its own Y axis.
+     const angle = Math.PI * 6 * rotationProgress; // 3 full orbits over the section
+     pivot.rotation.y = angle;
+
+     // Subtle vertical bob for a more organic feel
+     const bob = modelSize.y * 0.03 * Math.sin(angle * 1.5);
+     pivot.position.y = bob;
+
+     // Gentle micro-motions to beautify the presentation
+     model.rotation.x = THREE.MathUtils.degToRad(3) * Math.sin(angle * 1.2);
+     const baseTiltZ = window.innerWidth < 1000 ? 0 : THREE.MathUtils.degToRad(-25);
+     model.rotation.z = baseTiltZ + THREE.MathUtils.degToRad(2) * Math.sin(angle * 0.8);
+     }
+
+     }
+     });
 
     return () => {
       window.removeEventListener("resize", handleResize);
